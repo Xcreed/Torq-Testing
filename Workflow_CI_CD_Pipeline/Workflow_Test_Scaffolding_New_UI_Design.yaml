@@ -1,0 +1,668 @@
+!!ExportedWorkflow
+apiVersion: torq.io/v2alpha
+kind: Workflow
+id: 4b82277b-921a-466e-afa3-a1ddf08ad94c
+name: Workflow Test Scaffolding New UI Design
+trigger:
+  onDemandTrigger:
+    parameterList:
+      parameters:
+        - name: workflow_id
+          description: Workflow ID for the workflow under test
+          required: true
+          prettyName: WORKFLOW_ID
+          shortText:
+            defaultValue: 8fa057e1-1e55-44a3-ac52-1919b42c936a
+        - name: test_with_mocks
+          description: Enable or disable testing with Mocks
+          required: true
+          prettyName: TEST_WITH_MOCKS
+          boolean:
+            defaultValue: true
+        - name: revision_id
+          description: Revision ID for the workflow under test
+          required: true
+          prettyName: REVISION_ID
+          shortText:
+            defaultValue: 4afd2a27-bc8e-4e9f-a4f9-eac664e2d7fc
+    nestedOnly: true
+playbook:
+  steps:
+    - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.2
+      id: wf_params
+      env:
+        DATA_TYPE: JSON
+        VALUE_JSON: |-
+          {
+            "torq_integration": "torq_albertoc_dev",
+            "wf_tests_var": "wf_approval_tests"
+          }
+        VARIABLE_NAME: result
+      uuid: 39557fb1-b0d2-4f78-b7ff-167fa788daef
+      pretty_name: wf_params
+      options:
+        executor:
+          name: utils_infrastructure_v_1_3_39
+          env:
+            COMMAND: set_variable
+            SP_ENV_SCHEMA: '{"type": "object", "properties": {"DATA_TYPE": {"enum": ["boolean", "string", "JSON", "number"]}}, "required": ["VARIABLE_NAME", "DATA_TYPE"], "allOf": [{"if": {"properties": {"DATA_TYPE": {"const": "number"}}}, "then": {"required": ["VALUE_NUMBER"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "boolean"}}}, "then": {"required": ["VALUE_BOOLEAN"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "JSON"}}}, "then": {"required": ["VALUE_JSON"]}}]}'
+          sync: true
+          disable: false
+      manifestId: 25cbcffc-e660-43ed-804b-3c01c89180a2
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/torq/get-a-variable:8.1.0
+      id: get_current_tests
+      env:
+        KEY: '{{ $.wf_params.result.wf_tests_var }}'
+      envFrom:
+        integrationRef: '{{ $.wf_params.result.torq_integration }}'
+      uuid: cc86a1d1-b796-45ea-aefc-00b64a143188
+      pretty_name: Get Current Tests
+      options:
+        executor:
+          name: http_request_v_4_6_0
+          env:
+            AUTHORIZATION: Bearer
+            HEADERS: '{}'
+            METHOD: GET
+            PARSE_HJSON: "true"
+            REQUIRED_VARIABLES: '["ACCESS_TOKEN", "KEY"]'
+            TIMEOUT: "30"
+            TOKEN: '{{ .ACCESS_TOKEN }}'
+            URL: https://api.{{ .TORQ_BASE_URL }}/public/v2alpha/variables/{{ .KEY }}
+          sync: true
+          disable: false
+      manifestId: 113df204-5b8d-5be4-8f22-895f9e87a732
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/utils/array_utils/array-filter:2.3.0
+      id: filter_by_workflow_id
+      env:
+        FIELD_PATH: workflow_id
+        FILTER_ARG: '"{{ $.event.workflow_id }}"'
+        FILTER_FUNC: Equals
+        INPUT: '{{ $.get_current_tests.api_object.value_array }}'
+      uuid: 04334a7b-3f92-4107-b4f8-8f2e780c4f8d
+      pretty_name: Filter by workflow id
+      options:
+        executor:
+          name: utils_infrastructure_v_1_5_1
+          env:
+            COMMAND: array_filter
+          sync: true
+          disable: false
+      documentationUrl: https://learn.torq.io/docs/array-utilities#filter-array
+      manifestId: 587bf1b7-f81a-59bd-8a23-7c002a1463c5
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/utils/date_and_time_utils/get-date:4.0.4
+      id: timestamp_beginning_of_tests
+      env:
+        DATE: ""
+        DATE_FORMAT_LAYOUT: 2006-01-02T15:04:05Z07:00
+        TIME_AGO: ""
+      uuid: 9b8a288a-d8a1-4119-8c5b-5f95247b02a0
+      pretty_name: Timestamp - Beginning of Tests
+      options:
+        executor:
+          name: utils_infrastructure_v_1_3_39
+          env:
+            COMMAND: get_date
+          sync: true
+          disable: false
+      documentationUrl: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      manifestId: d81f678e-d200-4ca8-a4e4-3ee66c59b65b
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - loop:
+        in: '{{ $.filter_by_workflow_id.result.0.test_data }}'
+        key: loop_key
+        value: loop_value
+        steps:
+          - name: us-docker.pkg.dev/stackpulse/public/utils/date_and_time_utils/get-date:4.0.4
+            id: timestamp_before_current_test
+            env:
+              DATE: ""
+              DATE_FORMAT_LAYOUT: 2006-01-02T15:04:05Z07:00
+              TIME_AGO: ""
+            uuid: 9ac0c5a4-6f31-4bd8-9f10-7e3f93953b87
+            pretty_name: Timestamp - Before Current Test
+            options:
+              executor:
+                name: utils_infrastructure_v_1_3_39
+                env:
+                  COMMAND: get_date
+                sync: true
+                disable: false
+            documentationUrl: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+            manifestId: d81f678e-d200-4ca8-a4e4-3ee66c59b65b
+            isPrivate: false
+            mock_output:
+              enabled: false
+              payload: '{}'
+            skip: false
+          - if:
+              conditions:
+                or:
+                  - and:
+                      - lvalue: '{{ $.event.test_with_mocks }}'
+                        operator: EQUALS
+                        rvalue: "true"
+              then:
+                - trigger:
+                    id: trigger_wfut_with_test_data_mocks
+                    playbook_id: '{{ $.event.workflow_id }}'
+                    pretty_name: Trigger_WFUT_With_Test_Data_Mocks
+                    uuid: b91948c8-03a9-4ae8-ae2d-43c292a42ff8
+                    input: '{{ $.loop_value }}'
+                    ignore_failure: true
+                    playbook_name: event_workflow_id
+                    mock_output:
+                      enabled: false
+                      payload: '{}'
+                    run_with_mocks: true
+                    workflow_revision_id: '{{ $.event.revision_id }}'
+                    from_context: true
+                - name: us-docker.pkg.dev/stackpulse/public/utils/date_and_time_utils/get-date:4.0.4
+                  id: timestamp_after_current_test
+                  env:
+                    DATE: ""
+                    DATE_FORMAT_LAYOUT: 2006-01-02T15:04:05Z07:00
+                    TIME_AGO: ""
+                  uuid: 7cf56258-2b80-4f35-8eb9-866200488b60
+                  pretty_name: Timestamp - After Current Test
+                  options:
+                    executor:
+                      name: utils_infrastructure_v_1_3_39
+                      env:
+                        COMMAND: get_date
+                      sync: true
+                      disable: false
+                  documentationUrl: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+                  manifestId: d81f678e-d200-4ca8-a4e4-3ee66c59b65b
+                  isPrivate: false
+                  mock_output:
+                    enabled: false
+                    payload: '{}'
+                  skip: false
+                - name: us-docker.pkg.dev/stackpulse/public/utils/math_utils:1.2.3
+                  id: gross_test_duration
+                  env:
+                    INPUT: ({{ $.timestamp_after_current_test.timestamp }} - {{ $.timestamp_before_current_test.timestamp }})
+                  uuid: ba526c81-f777-448d-abcd-0eef9041eda6
+                  pretty_name: Gross Test Duration
+                  options:
+                    executor:
+                      name: utils_infrastructure_v_1_3_39
+                      env:
+                        COMMAND: math_utils
+                      sync: true
+                      disable: false
+                  manifestId: 5561a7d9-1f8b-4f3e-a091-9d4b7f1040fb
+                  isPrivate: false
+                  mock_output:
+                    enabled: false
+                    payload: '{}'
+                  skip: false
+                - if:
+                    conditions:
+                      or:
+                        - and:
+                            - lvalue: '{{ $.trigger_wfut_with_test_data_mocks.step_status.code }}'
+                              operator: EQUALS
+                              rvalue: "1"
+                    then:
+                      - collector:
+                          id: successful_tests
+                          uuid: 5381b063-80fa-4e4b-a964-b33d4ad0369f
+                          pretty_name: Successful Tests
+                          expression: '{{ $.loop_value }}'
+                          flatten: true
+                      - collector:
+                          id: successful_test_durations
+                          uuid: 9d3c5dda-c078-4d58-93b3-ad6d0fd03815
+                          pretty_name: Successful Test Durations
+                          expression: '{{ $.gross_test_duration.result }}'
+                          flatten: true
+                    else:
+                      - collector:
+                          id: failed_tests
+                          uuid: 3b0ccaa5-6f51-4c58-a3a8-97ab0ba3751d
+                          pretty_name: Failed Tests
+                          expression: '{{ $.loop_value }}'
+                          flatten: true
+                      - collector:
+                          id: failed_test_errors
+                          uuid: 5c9f29b0-d94b-4b7b-9226-c183efc92564
+                          pretty_name: Failed Test Errors
+                          expression: '{{ $.trigger_wfut_with_test_data_mocks.step_status.message }}'
+                          flatten: true
+                      - collector:
+                          id: failed_test_verbose_errors
+                          uuid: 9fd336c8-9b4b-4bbb-a066-b0ea85c1d728
+                          pretty_name: Failed Test Verbose Errors
+                          expression: '{{ $.trigger_wfut_with_test_data_mocks.step_status.verbose }}'
+                          flatten: true
+                      - name: us-docker.pkg.dev/stackpulse/public/torq/list-activity-logs:8.1.0
+                        id: list_activity_logs
+                        env:
+                          ACTIVITY_TYPE: workflow_runs
+                          END_TIME: '{{ $.timestamp_after_current_test.result }}'
+                          MAX_RETRIES: "3"
+                          RETRY_DELAY: "1"
+                          RETRY_ON_STATUS: 429,500-504
+                          START_TIME: '{{ $.timestamp_before_current_test.result }}'
+                          WORKFLOW_ID: '{{ $.event.workflow_id }}'
+                        envFrom:
+                          integrationRef: '{{ $.wf_params.result.torq_integration }}'
+                        uuid: ddcfa6bd-3db2-4f54-85aa-1b742e7d093b
+                        pretty_name: List activity logs
+                        options:
+                          executor:
+                            name: http_request_v_4_6_0
+                            env:
+                              AUTHORIZATION: Bearer
+                              HEADERS: '{}'
+                              METHOD: GET
+                              PARSE_HJSON: "true"
+                              REQUIRED_VARIABLES: '["ACCESS_TOKEN"]'
+                              TIMEOUT: "30"
+                              TOKEN: '{{ .ACCESS_TOKEN }}'
+                              URL: https://api.{{ .TORQ_BASE_URL }}/public/v1alpha/activity_logs?{{ if or .START_TIME }}&start_time={{ .START_TIME }}{{ end }}{{ if or .END_TIME }}&end_time={{ .END_TIME }}{{ end }}{{ if or .PAGE_SIZE }}&page_size={{ .PAGE_SIZE | urlEnc }}{{ end }}{{ if or .NEXT_PAGE_TOKEN }}&page_token={{ .NEXT_PAGE_TOKEN | urlEnc }}{{ end }}{{ if or .ACTIVITY_TYPE }}&activity_type={{ .ACTIVITY_TYPE | urlEnc }}{{ end }}{{ if or .WORKFLOW_ID }}&workflow_id={{ .WORKFLOW_ID | urlEnc }}{{ end }}{{ if or .PAYLOAD }}&payload={{ .PAYLOAD | urlEnc }}{{ end }}
+                            sync: true
+                            disable: false
+                        documentationUrl: https://docs.torq.io/torq-public-api/ref#listactivitylogs
+                        manifestId: 37e88cb9-4555-544c-9bc0-074b4f7973c1
+                        isPrivate: false
+                        mock_output:
+                          enabled: false
+                          payload: '{}'
+                        skip: false
+                      - name: us-docker.pkg.dev/stackpulse/public/utils/array_utils/array-filter:2.3.0
+                        id: filter_execution_for_test
+                        env:
+                          FIELD_PATH: event.body
+                          FILTER_ARG: '{{ $.loop_value }}'
+                          FILTER_FUNC: Equals
+                          INPUT: '{{ $.list_activity_logs.api_object.activity_logs }}'
+                        uuid: f6ddc56a-fe1b-4e6f-b11c-53e2aa2f1c92
+                        pretty_name: Filter Execution for Test
+                        options:
+                          executor:
+                            name: utils_infrastructure_v_1_5_1
+                            env:
+                              COMMAND: array_filter
+                            sync: true
+                            disable: false
+                        documentationUrl: https://learn.torq.io/docs/array-utilities#filter-array
+                        manifestId: 587bf1b7-f81a-59bd-8a23-7c002a1463c5
+                        isPrivate: false
+                        mock_output:
+                          enabled: false
+                          payload: '{}'
+                        skip: false
+                      - collector:
+                          id: failed_test_execution_urls
+                          uuid: f78a46a6-2f19-4d8c-85a3-20a61fdccd5e
+                          pretty_name: Failed Test Execution URLs
+                          expression: https://app.torq.io/workflow/{{ $.event.workflow_id }}?tab=history&account={{ $.filter_execution_for_test.result.0.account_name }}&execution={{ $.filter_execution_for_test.result.0.execution.id }}
+                          flatten: true
+                    uuid: d16764a1-6927-45bf-84fc-7ce35652264f
+                    pretty_name: If test succeeded
+              else:
+                - trigger:
+                    id: trigger_wfut_with_test_data
+                    playbook_id: '{{ $.event.workflow_id }}'
+                    pretty_name: Trigger_WFUT_With_Test_Data
+                    uuid: cd9a0330-718b-45de-8da3-bf0a6e73228f
+                    input: '{{ $.loop_value }}'
+                    ignore_failure: true
+                    playbook_name: event_workflow_id
+                    mock_output:
+                      enabled: false
+                      payload: '{}'
+                    workflow_revision_id: '{{ $.event.revision_id }}'
+                    from_context: true
+                - name: us-docker.pkg.dev/stackpulse/public/utils/date_and_time_utils/get-date:4.0.4
+                  id: timestamp_after_current_test
+                  env:
+                    DATE: ""
+                    DATE_FORMAT_LAYOUT: 2006-01-02T15:04:05Z07:00
+                    TIME_AGO: ""
+                  uuid: 4c65ca94-cebb-411f-9d0d-4cd397d4aa5d
+                  pretty_name: Timestamp - After Current Test
+                  options:
+                    executor:
+                      name: utils_infrastructure_v_1_3_39
+                      env:
+                        COMMAND: get_date
+                      sync: true
+                      disable: false
+                  documentationUrl: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+                  manifestId: d81f678e-d200-4ca8-a4e4-3ee66c59b65b
+                  isPrivate: false
+                  mock_output:
+                    enabled: false
+                    payload: '{}'
+                  skip: false
+                - name: us-docker.pkg.dev/stackpulse/public/utils/math_utils:1.2.3
+                  id: gross_test_duration
+                  env:
+                    INPUT: ({{ $.timestamp_after_current_test.timestamp }} - {{ $.timestamp_before_current_test.timestamp }})
+                  uuid: 79f4fd1e-01df-40d6-b864-80904186e707
+                  pretty_name: Gross Test Duration
+                  options:
+                    executor:
+                      name: utils_infrastructure_v_1_3_39
+                      env:
+                        COMMAND: math_utils
+                      sync: true
+                      disable: false
+                  manifestId: 5561a7d9-1f8b-4f3e-a091-9d4b7f1040fb
+                  isPrivate: false
+                  mock_output:
+                    enabled: false
+                    payload: '{}'
+                  skip: false
+                - if:
+                    conditions:
+                      or:
+                        - and:
+                            - lvalue: '{{ $.trigger_wfut_with_test_data.step_status.code }}'
+                              operator: EQUALS
+                              rvalue: "1"
+                    then:
+                      - collector:
+                          id: successful_tests
+                          uuid: d901c186-0fb6-447b-9536-a025ac70d0bb
+                          pretty_name: Successful Tests
+                          expression: '{{ $.loop_value }}'
+                          flatten: true
+                      - collector:
+                          id: successful_test_durations
+                          uuid: a96ab55b-f671-4705-b131-a82e4bd20a80
+                          pretty_name: Successful Test Durations
+                          expression: '{{ $.gross_test_duration.result }}'
+                          flatten: true
+                    else:
+                      - collector:
+                          id: failed_tests
+                          uuid: 373bd236-9f50-44f7-b884-3913efdb813a
+                          pretty_name: Failed Tests
+                          expression: '{{ $.loop_value }}'
+                          flatten: true
+                      - collector:
+                          id: failed_test_errors
+                          uuid: db4e5d3b-659d-4b06-85f0-4dba7b7ac3ee
+                          pretty_name: Failed Test Errors
+                          expression: '{{ $.trigger_wfut_with_test_data.step_status.message }}'
+                          flatten: true
+                      - collector:
+                          id: failed_test_verbose_errors
+                          uuid: 7077b7ec-64f4-410b-b5e1-f1a5f6a0861d
+                          pretty_name: Failed Test Verbose Errors
+                          expression: '{{ $.trigger_wfut_with_test_data.step_status.verbose }}'
+                          flatten: true
+                      - name: us-docker.pkg.dev/stackpulse/public/torq/list-activity-logs:8.1.0
+                        id: list_activity_logs
+                        env:
+                          ACTIVITY_TYPE: workflow_runs
+                          END_TIME: '{{ $.timestamp_after_current_test.result }}'
+                          MAX_RETRIES: "3"
+                          RETRY_DELAY: "1"
+                          RETRY_ON_STATUS: 429,500-504
+                          START_TIME: '{{ $.timestamp_before_current_test.result }}'
+                          WORKFLOW_ID: '{{ $.event.workflow_id }}'
+                        envFrom:
+                          integrationRef: '{{ $.wf_params.result.torq_integration }}'
+                        uuid: cf89357b-9805-4ead-afe3-0fd5356e37a1
+                        pretty_name: List activity logs
+                        options:
+                          executor:
+                            name: http_request_v_4_6_0
+                            env:
+                              AUTHORIZATION: Bearer
+                              HEADERS: '{}'
+                              METHOD: GET
+                              PARSE_HJSON: "true"
+                              REQUIRED_VARIABLES: '["ACCESS_TOKEN"]'
+                              TIMEOUT: "30"
+                              TOKEN: '{{ .ACCESS_TOKEN }}'
+                              URL: https://api.{{ .TORQ_BASE_URL }}/public/v1alpha/activity_logs?{{ if or .START_TIME }}&start_time={{ .START_TIME }}{{ end }}{{ if or .END_TIME }}&end_time={{ .END_TIME }}{{ end }}{{ if or .PAGE_SIZE }}&page_size={{ .PAGE_SIZE | urlEnc }}{{ end }}{{ if or .NEXT_PAGE_TOKEN }}&page_token={{ .NEXT_PAGE_TOKEN | urlEnc }}{{ end }}{{ if or .ACTIVITY_TYPE }}&activity_type={{ .ACTIVITY_TYPE | urlEnc }}{{ end }}{{ if or .WORKFLOW_ID }}&workflow_id={{ .WORKFLOW_ID | urlEnc }}{{ end }}{{ if or .PAYLOAD }}&payload={{ .PAYLOAD | urlEnc }}{{ end }}
+                            sync: true
+                            disable: false
+                        documentationUrl: https://docs.torq.io/torq-public-api/ref#listactivitylogs
+                        manifestId: 37e88cb9-4555-544c-9bc0-074b4f7973c1
+                        isPrivate: false
+                        mock_output:
+                          enabled: false
+                          payload: '{}'
+                        skip: false
+                      - name: us-docker.pkg.dev/stackpulse/public/utils/array_utils/array-filter:2.3.0
+                        id: filter_execution_for_test
+                        env:
+                          FIELD_PATH: event.body
+                          FILTER_ARG: '{{ $.loop_value }}'
+                          FILTER_FUNC: Equals
+                          INPUT: '{{ $.list_activity_logs.api_object.activity_logs }}'
+                        uuid: b04cc114-36c8-40b6-8c8f-9531c8256e3a
+                        pretty_name: Filter Execution for Test
+                        options:
+                          executor:
+                            name: utils_infrastructure_v_1_5_1
+                            env:
+                              COMMAND: array_filter
+                            sync: true
+                            disable: false
+                        documentationUrl: https://learn.torq.io/docs/array-utilities#filter-array
+                        manifestId: 587bf1b7-f81a-59bd-8a23-7c002a1463c5
+                        isPrivate: false
+                        mock_output:
+                          enabled: false
+                          payload: '{}'
+                        skip: false
+                      - collector:
+                          id: failed_test_execution_urls
+                          uuid: 406e75fd-1fce-4041-8b73-1b094a0c0907
+                          pretty_name: Failed Test Execution URLs
+                          expression: https://app.torq.io/workflow/{{ $.event.workflow_id }}?tab=history&account={{ $.filter_execution_for_test.result.0.account_name }}&execution={{ $.filter_execution_for_test.result.0.execution.id }}
+                          flatten: true
+                    uuid: 05b4473b-5fc6-47d5-9a88-18c092e78915
+                    pretty_name: If test succeeded
+              uuid: e081d831-4754-4f23-b6f7-87266a11a88c
+              pretty_name: If Test With Mocks
+        uuid: 0da67fc4-edf0-4448-9451-830b63231f28
+        pretty_name: For Each Unit Test
+        run_in_parallel: true
+    - name: us-docker.pkg.dev/stackpulse/public/utils/date_and_time_utils/get-date:4.0.4
+      id: timestamp_end_of_tests
+      env:
+        DATE: ""
+        DATE_FORMAT_LAYOUT: 2006-01-02T15:04:05Z07:00
+        TIME_AGO: ""
+      uuid: 234481a1-13d9-4949-bf72-fc31420ee2d5
+      pretty_name: Timestamp - End of Tests
+      options:
+        executor:
+          name: utils_infrastructure_v_1_3_39
+          env:
+            COMMAND: get_date
+          sync: true
+          disable: false
+      documentationUrl: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+      manifestId: d81f678e-d200-4ca8-a4e4-3ee66c59b65b
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/utils/math_utils:1.2.3
+      id: overall_duration_of_tests
+      env:
+        INPUT: ({{$.timestamp_end_of_tests.timestamp }} - {{ $.timestamp_beginning_of_tests.timestamp }})
+      uuid: e314f8d1-972d-4236-a321-8da212ba8626
+      pretty_name: Overall duration of tests
+      options:
+        executor:
+          name: utils_infrastructure_v_1_3_39
+          env:
+            COMMAND: math_utils
+          sync: true
+          disable: false
+      manifestId: 5561a7d9-1f8b-4f3e-a091-9d4b7f1040fb
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - switch:
+        uuid: 2a07dd35-8bc1-436d-9515-7758dd2dda51
+        pretty_name: Evaluate Test Results
+        cases:
+          - id: 9bf4f020-6d99-435d-b603-12a0806a23ec
+            pretty_name: All Tests Successful
+            conditions:
+              or:
+                - and:
+                    - lvalue: '{{ $.failed_tests.result }}'
+                      operator: IS_EMPTY
+                      rvalue: ""
+            steps:
+              - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/print:1.2.0
+                id: markdown_tests_report
+                env:
+                  INPUT: |+
+                    *Verdict*: `PASSED`
+                    *Testing Duration*: {{ $.overall_duration_of_tests.result }}s
+
+                    *Number of tests succeeded*: {{ $.successful_tests.length }}
+
+                    {{ range $index, $element:=$.successful_tests.result }}
+                    Test Data:
+                    ```{{ toPrettyJson $element }}
+                    ```
+                    Successful Test Duration: {{index $.successful_test_durations.result $index}}s
+                    {{end}}
+
+                uuid: e65a67f8-85ac-467c-a1e5-bbe791018bb5
+                pretty_name: Markdown Tests Report
+                options:
+                  executor:
+                    name: utils_infrastructure_v_1_3_39
+                    env:
+                      COMMAND: print
+                    sync: true
+                    disable: false
+                manifestId: 989708a1-0c14-4077-8733-c231f1c24335
+                isPrivate: false
+                mock_output:
+                  enabled: false
+                  payload: '{}'
+                skip: false
+          - id: aa4e2dc0-72fe-4955-b835-8aed93665e4d
+            pretty_name: All Test Failed
+            conditions:
+              or:
+                - and:
+                    - lvalue: '{{ $.successful_tests.result }}'
+                      operator: IS_EMPTY
+                      rvalue: ""
+            steps:
+              - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/print:1.2.0
+                id: markdown_tests_report
+                env:
+                  INPUT: "*Verdict*: `FAILED`\n*Testing Duration*: {{ $.overall_duration_of_tests.result }}s\n\n*Number of tests failed*: {{ $.failed_tests.length }}\n\n{{ range $index, $element:=$.failed_tests.result }}\nTest Data:\n```{{ toPrettyJson $element }}\n``` \n*Error*: `{{index $.failed_test_errors.result $index}}`\n{{index $.failed_test_verbose_errors.result $index}}\n*Link to Failed Execution*: {{index $.failed_test_execution_urls.result $index}}\n{{end}}"
+                uuid: 4bce5299-0c78-4213-af65-ec61ca9a7261
+                pretty_name: Markdown Tests Report
+                options:
+                  executor:
+                    name: utils_infrastructure_v_1_3_39
+                    env:
+                      COMMAND: print
+                    sync: true
+                    disable: false
+                manifestId: 989708a1-0c14-4077-8733-c231f1c24335
+                isPrivate: false
+                mock_output:
+                  enabled: false
+                  payload: '{}'
+                skip: false
+        default:
+          id: 610edff2-acac-4a36-bc06-f5af9b07f48a
+          steps:
+            - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/print:1.2.0
+              id: markdown_tests_report
+              env:
+                INPUT: |-
+                  *Verdict*: `FAILED`
+                  *Testing Duration*: {{ $.overall_duration_of_tests.result }}s
+
+                  *Number of tests failed*: {{ $.failed_tests.length }}
+
+                  {{ range $index, $element:=$.failed_tests.result }}
+                  Test Data:
+                  ```{{ toPrettyJson $element }}
+                  ````
+                  *Error*: `{{index $.failed_test_errors.result $index}}`
+                  {{index $.failed_test_verbose_errors.result $index}}
+                  *Link to Failed Execution*: {{index $.failed_test_execution_urls.result $index}}
+                  {{end}}
+
+                  *Number of tests succeeded*: {{ $.successful_tests.length }}
+
+                  {{ range $index, $element:=$.successful_tests.result }}
+                  Test Data:
+                  ```{{ toPrettyJson $element }}
+                  ````
+                  Successful Test Duration: {{index $.successful_test_durations.result $index}}s
+                  {{end}}
+              uuid: 5199cd64-9609-4997-acb8-381c963681d4
+              pretty_name: Markdown Tests Report
+              options:
+                executor:
+                  name: utils_infrastructure_v_1_3_39
+                  env:
+                    COMMAND: print
+                  sync: true
+                  disable: false
+              manifestId: 989708a1-0c14-4077-8733-c231f1c24335
+              isPrivate: false
+              mock_output:
+                enabled: false
+                payload: '{}'
+              skip: false
+          pretty_name: Some Tests Failed
+    - exit:
+        success: "true"
+        pretty_name: Exit
+        output: |-
+          {
+            "test_report": "{{ jsonEscape $.markdown_tests_report.output }}"
+          }
+        uuid: 1f7f4303-5ad2-404b-a12b-90380092f13d
+        use_schema: true
+  output_schema: |-
+    {
+        "test_report": {
+            "type": 9,
+            "prettyName": "TEST_REPORT",
+            "description": ""
+        }
+    }
+  tags:
+    - WF CI/CD Pipe
+  section: Workflow CI/CD Pipeline
+root: true

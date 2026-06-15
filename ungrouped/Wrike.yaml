@@ -1,0 +1,13 @@
+!!ExportedWorkflow
+apiVersion: torq.io/v2alpha
+kind: Workflow
+id: 098d541c-1ba6-4770-ad28-80133a7b349e
+name: Wrike
+trigger:
+  onDemandTrigger:
+    parameterList:
+      parameters: []
+playbook:
+  steps: []
+  output_schema: '{}'
+root: true

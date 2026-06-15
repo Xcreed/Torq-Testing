@@ -1,0 +1,285 @@
+!!ExportedWorkflow
+apiVersion: torq.io/v2alpha
+kind: Workflow
+id: 60c1ea5f-6bf6-4626-829b-7c9770c24011
+name: View Confluence Page by Short Link
+trigger:
+  onDemandTrigger:
+    parameterList:
+      parameters:
+        - name: confluence_short_link
+          description: 'Link to a confluence page via shortlink, example: https://jira.domain.com/wiki/x/GUID'
+          required: true
+          prettyName: Confluence Short Link
+          shortText:
+            defaultValue: ""
+playbook:
+  steps:
+    - name: us-docker.pkg.dev/stackpulse/public/scripting/python:3.8.0
+      id: grab_confluence_page_id_from_short_link
+      env:
+        PYTHON_CODE: "import re\nimport requests\nfrom urllib.parse import urlparse\n\n# Placeholders\nUSERNAME = \"{{ $.integrations.ao_confluence.confluence_user }}\"\nPASSWORD = \"{{ $.integrations.ao_confluence.confluence_password }}\"\nSHORT_URL = \"{{ $.event.confluence_short_link }}\"\n\ndef is_allowed_domain(url: str) -> bool:\n    parsed = urlparse(url)\n    return parsed.hostname and parsed.hostname.endswith(\"exampledomain.com\")\n\ndef get_page_id_from_short_url(short_url: str, username: str, password: str) -> str:\n    # \U0001F6AB Block non-aoins domains\n    if not is_allowed_domain(short_url):\n        raise ValueError(\"URL domain is not allowed. Must be exampledomain.com\")\n\n    response = requests.get(\n        short_url,\n        auth=(username, password),\n        headers={\"Accept\": \"text/html\"},\n        timeout=30,\n    )\n    response.raise_for_status()\n\n    match = re.search(\n        r'<meta[^>]*name=[\"\\']ajs-page-id[\"\\'][^>]*content=[\"\\'](\\d+)[\"\\']',\n        response.text,\n        re.IGNORECASE,\n    )\n    if not match:\n        raise ValueError(\"Could not find ajs-page-id in the HTML response.\")\n\n    return match.group(1)\n\nif __name__ == \"__main__\":\n    page_id = get_page_id_from_short_url(SHORT_URL, USERNAME, PASSWORD)\n    print(f\"{page_id}\", end=\"\")"
+      uuid: b51f5d87-0128-4e51-8d1f-be591cbf5c55
+      pretty_name: Grab Confluence Page ID From Short Link
+      options: {}
+      icon: https://storage.googleapis.com/stackpulse-public/vendors/python.svg
+      manifestId: a1c8a0a5-879b-5e79-96bd-159a9d5bbfa8
+      isPrivate: false
+      isPrivateUrl: true
+      mock_output:
+        enabled: false
+      skip: false
+      retry: {}
+    - name: custom-step:2.0.0
+      id: get_page
+      env:
+        PAGE_ID: '{{ $.grab_confluence_page_id_from_short_link.output }}'
+      envFrom:
+        integrationRef: integration_name
+      uuid: 4261a32e-f140-43e1-a731-9c6b957ddf4e
+      pretty_name: Get Page
+      options:
+        executor:
+          name: http_request_v_4_35_0
+          env: {}
+          sync: true
+          disable: false
+      documentationUrl: https://docs.atlassian.com/ConfluenceServer/rest/8.9.3/#api/
+      manifestId: 3ae8959e-bca1-4dd4-a389-d0c89a390d73
+      isPrivate: true
+      isPrivateUrl: true
+      mock_output:
+        enabled: false
+      skip: false
+      retry: {}
+    - exit:
+        success: "true"
+        pretty_name: Exit
+        output: |-
+          {
+            "output": {{ $.get_page.api_object }}
+          }
+        uuid: 7b3a4be2-e5b6-4dda-bc77-fe4908929d15
+        use_schema: true
+  output_schema: |-
+    {
+        "output": {
+            "type": 10,
+            "prettyName": "output",
+            "description": ""
+        }
+    }
+root: true
+---
+!!ExportedPrivateStep
+basestepid: ""
+vendor:
+  id: ""
+  icon: https://assets.torq.io/vendors/confluence.svg
+  vendor: confluence
+  name: Confluence
+  is_private: false
+name: Get Page
+description: Get a Confluence Page's Contents
+documentationurl: https://docs.atlassian.com/ConfluenceServer/rest/8.9.3/#api/
+runtime:
+  image: us-docker.pkg.dev/stackpulse/public/http/request
+  imageVersion: 4.33.0
+  envs:
+    - key: URL
+      value: '{{ .SERVER_ENDPOINT }}/rest/api/content/{{ .PAGE_ID }}?expand=body.storage'
+    - key: METHOD
+      value: GET
+    - key: CONTENT_TYPE
+      value: application/json; charset=utf-8
+    - key: AUTHORIZATION
+      value: Basic
+    - key: FAIL_ON_NON_SUCCESS_RESPONSE
+      value: "true"
+    - key: BODY
+      value: ""
+    - key: HEADERS
+      value: ""
+    - key: PASSWORD
+      value: '{{ .CONFLUENCE_PASSWORD }}'
+    - key: USERNAME
+      value: '{{ .CONFLUENCE_USER }}'
+    - key: PARSE_HJSON
+      value: "true"
+    - key: REQUIRED_VARIABLES
+      value: '["SERVER_ENDPOINT","CONFLUENCE_USER","CONFLUENCE_PASSWORD","PAGE_ID"]'
+    - key: GO_TEMPLATE_BODY_PARSING
+      value: "true"
+    - key: RESPONSE_API_OBJECT_ONLY
+      value: "true"
+envs:
+  - name: SERVER_ENDPOINT
+    type: string
+    required: true
+    options: {}
+    fromIntegration: 2690a3eb-c006-45ab-8bc9-eb65243719f5
+  - name: CONFLUENCE_USER
+    type: string
+    required: true
+    options: {}
+    fromIntegration: 2690a3eb-c006-45ab-8bc9-eb65243719f5
+  - name: CONFLUENCE_PASSWORD
+    type: string
+    required: true
+    options: {}
+    fromIntegration: 2690a3eb-c006-45ab-8bc9-eb65243719f5
+  - name: PAGE_ID
+    type: string
+    required: true
+    options: {}
+outputs:
+  - name: api_object
+    type: json
+integrations:
+  - b72c87d5-dc8b-4d30-b96b-cda730e8055f
+basetype: 1
+options:
+  executor:
+    name: http_request_v_4_35_0
+    env:
+      AUTHORIZATION: Basic
+      BODY: ""
+      CONTENT_TYPE: application/json; charset=utf-8
+      FAIL_ON_NON_SUCCESS_RESPONSE: "true"
+      GO_TEMPLATE_BODY_PARSING: "true"
+      HEADERS: ""
+      METHOD: GET
+      PARSE_HJSON: "true"
+      PASSWORD: '{{ .CONFLUENCE_PASSWORD }}'
+      REQUIRED_VARIABLES: '["SERVER_ENDPOINT","CONFLUENCE_USER","CONFLUENCE_PASSWORD","PAGE_ID"]'
+      RESPONSE_API_OBJECT_ONLY: "true"
+      URL: '{{ .SERVER_ENDPOINT }}/rest/api/content/{{ .PAGE_ID }}?expand=body.storage'
+      USERNAME: '{{ .CONFLUENCE_USER }}'
+    sync: true
+  outputToFile: true
+exportedstepid: 3ae8959e-bca1-4dd4-a389-d0c89a390d73
+rawmanifest:
+  apiVersion: stackpulse.io/v1
+  kind: Step
+  metadata:
+    name: Get Page
+    imageName: custom-step
+    description: Get a Confluence Page's Contents
+    type: custom
+    vendor: confluence
+    version: 1.0.0
+    featureFlag: ""
+    documentation_url: https://docs.atlassian.com/ConfluenceServer/rest/8.9.3/#api/
+    isPrivate: true
+    privateStep:
+      base: 1
+  outputs:
+    - name: api_object
+      type: json
+  envs:
+    - name: SERVER_ENDPOINT
+      type: string
+      required: true
+      options: {}
+      fromIntegration: 2690a3eb-c006-45ab-8bc9-eb65243719f5
+    - name: CONFLUENCE_USER
+      type: string
+      required: true
+      options: {}
+      fromIntegration: 2690a3eb-c006-45ab-8bc9-eb65243719f5
+    - name: CONFLUENCE_PASSWORD
+      type: string
+      required: true
+      options: {}
+      fromIntegration: 2690a3eb-c006-45ab-8bc9-eb65243719f5
+    - name: PAGE_ID
+      type: string
+      required: true
+      options: {}
+  integrations:
+    - b72c87d5-dc8b-4d30-b96b-cda730e8055f
+  options:
+    executor:
+      name: http_request_v_4_35_0
+      env:
+        AUTHORIZATION: Basic
+        BODY: ""
+        CONTENT_TYPE: application/json; charset=utf-8
+        FAIL_ON_NON_SUCCESS_RESPONSE: "true"
+        GO_TEMPLATE_BODY_PARSING: "true"
+        HEADERS: ""
+        METHOD: GET
+        PARSE_HJSON: "true"
+        PASSWORD: '{{ .CONFLUENCE_PASSWORD }}'
+        REQUIRED_VARIABLES: '["SERVER_ENDPOINT","CONFLUENCE_USER","CONFLUENCE_PASSWORD","PAGE_ID"]'
+        RESPONSE_API_OBJECT_ONLY: "true"
+        URL: '{{ .SERVER_ENDPOINT }}/rest/api/content/{{ .PAGE_ID }}?expand=body.storage'
+        USERNAME: '{{ .CONFLUENCE_USER }}'
+      sync: true
+    outputToFile: true
+  http:
+    imageName: us-docker.pkg.dev/stackpulse/public/http/request
+    imageVersion: 4.33.0
+    envs:
+      AUTHORIZATION: Basic
+      BODY: ""
+      CONTENT_TYPE: application/json; charset=utf-8
+      FAIL_ON_NON_SUCCESS_RESPONSE: "true"
+      GO_TEMPLATE_BODY_PARSING: "true"
+      HEADERS: ""
+      METHOD: GET
+      PARSE_HJSON: "true"
+      PASSWORD: '{{ .CONFLUENCE_PASSWORD }}'
+      REQUIRED_VARIABLES: '["SERVER_ENDPOINT","CONFLUENCE_USER","CONFLUENCE_PASSWORD","PAGE_ID"]'
+      RESPONSE_API_OBJECT_ONLY: "true"
+      URL: '{{ .SERVER_ENDPOINT }}/rest/api/content/{{ .PAGE_ID }}?expand=body.storage'
+      USERNAME: '{{ .CONFLUENCE_USER }}'
+---
+!!ExportedCustomIntegrationType
+id: b72c87d5-dc8b-4d30-b96b-cda730e8055f
+type: 25
+name: Confluence Server
+title: Confluence Server
+cardlabel: ""
+modallabel: ""
+logourl: https://upload.wikimedia.org/wikipedia/commons/thumb/0/05/Atlassian_Confluence_2017_logo_%28cropped%29.svg/1280px-Atlassian_Confluence_2017_logo_%28cropped%29.svg.png
+columns: {}
+section: 4
+enrichmentconfiguration: []
+defaultcondition: []
+documentation: https://docs.atlassian.com/ConfluenceServer/rest/8.9.3/#api
+hookconfig: []
+attributes:
+  - name: Server Endpoint
+    type: plain
+    variable: SERVER_ENDPOINT
+    description: HTTPs must be included
+  - name: Confluence User
+    type: plain
+    variable: CONFLUENCE_USER
+  - name: Confluence Password
+    type: secret
+    variable: CONFLUENCE_PASSWORD
+sidebarlabel: ""
+modallabel2: ""
+digest: ""
+vendor: ""
+health:
+  request:
+    url: '{{ $.SERVER_ENDPOINT }}'
+    method: GET
+    headers:
+      accept: application/json; charset=utf-8
+      authorization: Basic {{ b64enc (printf "%s:%s" .CONFLUENCE_USER .CONFLUENCE_PASSWORD) }}
+    timeout: 0
+    curl_command: ""
+    skip_ssl_verification: false
+    data: ""
+  response:
+    code: 200
+    body: ""
+    error_path: ""
+featureflag: ""
+supportsexternalvault: false
+iscustom: true
+searchkeywords: []

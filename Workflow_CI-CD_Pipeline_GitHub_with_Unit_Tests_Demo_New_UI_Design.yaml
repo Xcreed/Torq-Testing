@@ -1,0 +1,583 @@
+!!ExportedWorkflow
+apiVersion: torq.io/v2alpha
+kind: Workflow
+id: 8792ea53-d8a7-43b7-b52f-1c9077546003
+name: Workflow CI-CD Pipeline GitHub with Unit Tests Demo New UI Design
+trigger:
+  internalEventTrigger:
+    scenarioId: REQUEST_FOR_REVIEW
+    conditions:
+      or:
+        and: []
+playbook:
+  steps:
+    - parallel:
+        uuid: 63a58b8d-e84d-4825-9739-e864aab54c8f
+        pretty_name: Parallel Executions
+        threads:
+          - uuid: 81ddb605-0dcd-4265-9c4e-74e38ae99c16
+            steps:
+              - name: us-docker.pkg.dev/stackpulse/public/utils/date_and_time_utils/get-date:4.0.4
+                id: unix_time
+                env:
+                  DATE_FORMAT_LAYOUT: "1136214245"
+                uuid: c735c57e-b23b-4a3f-9b30-c22fdd451367
+                pretty_name: Unix time
+                options:
+                  executor:
+                    name: utils_infrastructure_v_1_3_39
+                    env:
+                      COMMAND: get_date
+                    sync: true
+                    disable: false
+                documentationUrl: https://en.wikipedia.org/wiki/List_of_tz_database_time_zones
+                manifestId: d81f678e-d200-4ca8-a4e4-3ee66c59b65b
+                isPrivate: false
+                mock_output:
+                  enabled: false
+                  payload: '{}'
+                skip: false
+          - uuid: f5b5062f-7532-479a-938c-428346585cee
+            steps:
+              - name: us-docker.pkg.dev/stackpulse/public/utils/string_utils/to-lower:1.1.2
+                id: lowercase_wf_name
+                env:
+                  INPUT: '{{ $.event.workflow_name }}'
+                uuid: 6b179f13-42c0-4f79-a7d9-5bd44f50297f
+                pretty_name: Lowercase wf name
+                options:
+                  executor:
+                    name: utils_infrastructure_v_1_3_39
+                    env:
+                      COMMAND: to_lower
+                    sync: true
+                    disable: false
+                manifestId: 971fa1a8-d547-4463-abf0-91501a139c4e
+                isPrivate: false
+                mock_output:
+                  enabled: false
+                  payload: '{}'
+                skip: false
+              - name: us-docker.pkg.dev/stackpulse/public/utils/string_utils/replace-text:2.0.2
+                id: remove_slashes_from_wf_name
+                env:
+                  INPUT: '{{ $.lowercase_wf_name.result }}'
+                  NEW_TEXT: _
+                  OLD_TEXT: /
+                uuid: 0d8fa6f9-7b0e-47d2-8087-338c9bb5713a
+                pretty_name: Remove slashes from WF name
+                options:
+                  executor:
+                    name: utils_infrastructure_v_1_3_39
+                    env:
+                      COMMAND: replace_text
+                    sync: true
+                    disable: false
+                manifestId: 0fcc9b41-a46c-4405-923f-b5d30622a85d
+                isPrivate: false
+                mock_output:
+                  enabled: false
+                  payload: '{}'
+                skip: false
+              - name: us-docker.pkg.dev/stackpulse/public/utils/string_utils/replace-text:2.0.2
+                id: remove_spaces_from_wf_name
+                env:
+                  INPUT: '{{ $.remove_slashes_from_wf_name.result }}'
+                  NEW_TEXT: _
+                  OLD_TEXT: ' '
+                uuid: 5fafb07e-8ac5-4e35-8611-281c11b68e1c
+                pretty_name: Remove spaces from WF name
+                options:
+                  executor:
+                    name: utils_infrastructure_v_1_3_39
+                    env:
+                      COMMAND: replace_text
+                    sync: true
+                    disable: false
+                manifestId: 0fcc9b41-a46c-4405-923f-b5d30622a85d
+                isPrivate: false
+                mock_output:
+                  enabled: false
+                  payload: '{}'
+                skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.2
+      id: wf_params
+      env:
+        DATA_TYPE: JSON
+        VALUE_JSON: |-
+          {
+            "slack_integration": "citasanchez_com",
+            "torq_integration": "torq_albertoc_dev",
+            "github_integration": "my_github_token",
+            "github_org": "Citasanchez",
+            "root_branch": "main",
+            "github_repo": "WF-CI-CD-Pipeline-Demo",
+            "branch_name": "{{ $.remove_spaces_from_wf_name.result }}_{{ $.unix_time.result }}",
+            "file_path": "workflows/{{ $.remove_spaces_from_wf_name.result }}.yaml",
+            "Slack_Channel_for_Pull_Requests": "#torq-wf-ci-cd-pipeline-github-pr"
+          }
+        VARIABLE_NAME: results
+      uuid: 55817f61-ccdc-4072-9051-0b29b84140ad
+      pretty_name: WF Params
+      options:
+        executor:
+          name: utils_infrastructure_v_1_3_39
+          env:
+            COMMAND: set_variable
+            SP_ENV_SCHEMA: '{"type": "object", "properties": {"DATA_TYPE": {"enum": ["boolean", "string", "JSON", "number"]}}, "required": ["VARIABLE_NAME", "DATA_TYPE"], "allOf": [{"if": {"properties": {"DATA_TYPE": {"const": "number"}}}, "then": {"required": ["VALUE_NUMBER"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "boolean"}}}, "then": {"required": ["VALUE_BOOLEAN"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "JSON"}}}, "then": {"required": ["VALUE_JSON"]}}]}'
+          sync: true
+          disable: false
+      manifestId: 25cbcffc-e660-43ed-804b-3c01c89180a2
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/torq/retrieve-a-revision:1.2.0
+      id: retrieve_wf_revision_to_publish
+      env:
+        REVISION_ID: '{{ $.event.revision_id }}'
+        WORKFLOW_ID: '{{ $.event.workflow_id }}'
+      envFrom:
+        integrationRef: '{{ $.wf_params.results.torq_integration }}'
+      uuid: 159dea09-323f-4476-92e1-776c19b459e1
+      pretty_name: Retrieve WF revision to publish
+      options:
+        executor:
+          name: http_request_v_4_6_0
+          env:
+            AUTHORIZATION: Bearer
+            BODY: ""
+            HEADERS: '{}'
+            METHOD: GET
+            PARSE_HJSON: "true"
+            REQUIRED_VARIABLES: '["ACCESS_TOKEN","WORKFLOW_ID","REVISION_ID"]'
+            TOKEN: '{{ .ACCESS_TOKEN }}'
+            URL: https://api.{{ .TORQ_BASE_URL }}/public/v1alpha/workflows/{{ .WORKFLOW_ID | urlEnc }}/revision/{{ .REVISION_ID | urlEnc }}?{{ if .WITH_NESTED }}&with_nested={{ .WITH_NESTED | urlEnc }}{{ end }}
+          sync: true
+          disable: false
+      documentationUrl: https://learn.torq.io/apidocs/retrieve-a-revision
+      manifestId: a861a790-d297-5a97-8552-4e8b31bbfcc8
+      isPrivate: false
+      isPrivateUrl: true
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/github/search-branches:1.0.2
+      id: get_branch_details
+      env:
+        BRANCH_NAME: '{{ $.wf_params.results.root_branch }}'
+        OWNER_NAME: '{{ $.wf_params.results.github_org }}'
+        REPOSITORY_NAME: '{{ $.wf_params.results.github_repo }}'
+      envFrom:
+        integrationRef: '{{ $.wf_params.results.github_integration }}'
+      uuid: 939124ef-ffc7-4596-803a-23cd80bd8961
+      pretty_name: Get Branch Details
+      options:
+        executor:
+          name: http_request_v_4_2_8
+          env:
+            AUTHORIZATION: None
+            BODY: ""
+            HEADERS: |-
+              {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": "token {{ .TOKEN | jsonEscape }}",
+                "Content-Type": "application/json"
+              }
+            METHOD: GET
+            PARSE_HJSON: "true"
+            REQUIRED_VARIABLES: '["TOKEN","OWNER_NAME","REPOSITORY_NAME","BRANCH_NAME"]'
+            TIMEOUT: "30"
+            URL: https://api.github.com/repos/{{ .OWNER_NAME | urlEnc }}/{{ .REPOSITORY_NAME | urlEnc }}/git/matching-refs/heads/{{ .BRANCH_NAME | urlEnc }}
+          sync: true
+          disable: false
+      documentationUrl: https://docs.github.com/en/rest/git/refs?apiVersion=2022-11-28#list-matching-references
+      manifestId: a874845a-db23-4168-a271-9fe066591553
+      isPrivate: false
+      isPrivateUrl: true
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/github/create-branch:1.0.1
+      id: create_new_branch_for_commit
+      env:
+        BRANCH_NAME: '{{ $.wf_params.results.branch_name }}'
+        BRANCH_SHA1: '{{ $.get_branch_details.api_object.0.object.sha }}'
+        OWNER_NAME: '{{ $.wf_params.results.github_org }}'
+        REPOSITORY_NAME: '{{ $.wf_params.results.github_repo}}'
+      envFrom:
+        integrationRef: '{{ $.wf_params.results.github_integration }}'
+      uuid: c0de365b-3c7d-43b0-9f98-23683b2f19d6
+      pretty_name: Create New Branch for Commit
+      options:
+        executor:
+          name: http_request_v_4_2_8
+          env:
+            AUTHORIZATION: None
+            BODY: |-
+              {
+                "ref": "refs/heads/{{ .BRANCH_NAME | jsonEscape }}",
+                "sha": "{{ .BRANCH_SHA1 | jsonEscape }}"
+              }
+            CONTENT_TYPE: application/json; charset=utf-8
+            HEADERS: |-
+              {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": "token {{ .TOKEN | jsonEscape }}",
+                "Content-Type": "application/json"
+              }
+            METHOD: POST
+            PARSE_HJSON: "true"
+            REQUIRED_VARIABLES: '["TOKEN","OWNER_NAME","REPOSITORY_NAME","BRANCH_NAME","BRANCH_SHA1"]'
+            TIMEOUT: "30"
+            URL: https://api.github.com/repos/{{ .OWNER_NAME | urlEnc }}/{{ .REPOSITORY_NAME | urlEnc }}/git/refs
+          sync: true
+          disable: false
+      documentationUrl: https://docs.github.com/en/rest/git/refs?apiVersion=2022-11-28#create-a-reference
+      manifestId: a2de52c7-e148-4205-9a73-a418aadde801
+      isPrivate: false
+      isPrivateUrl: true
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/github/get-repository-content:1.0.0
+      id: get_current_wf_file
+      env:
+        FILE_PATH: '{{ $.wf_params.results.file_path }}'
+        OWNER_NAME: '{{ $.wf_params.results.github_org }}'
+        REFERENCE_NAME: '{{ $.wf_params.results.branch_name }}'
+        REPOSITORY_NAME: '{{ $.wf_params.results.github_repo }}'
+      envFrom:
+        integrationRef: '{{ $.wf_params.results.github_integration }}'
+      ignoreFailure: true
+      uuid: 41553321-3723-47cd-af6b-ca8cab695295
+      pretty_name: Get current WF file
+      options:
+        executor:
+          name: http_request_v_4_2_8
+          env:
+            AUTHORIZATION: Bearer
+            BODY: ""
+            HEADERS: |-
+              {
+                "accept": "application/vnd.github+json",
+                "x-github-api-version": "2022-11-28"
+              }
+            METHOD: GET
+            PARSE_HJSON: "true"
+            REQUIRED_VARIABLES: '["TOKEN","OWNER_NAME","REPOSITORY_NAME","FILE_PATH"]'
+            TOKEN: '{{ .TOKEN }}'
+            URL: https://api.github.com/repos/{{ .OWNER_NAME | urlEnc }}/{{ .REPOSITORY_NAME | urlEnc }}/contents/{{ .FILE_PATH | urlEnc }}?{{ if .REFERENCE_NAME }}&ref={{ .REFERENCE_NAME | urlEnc }}{{ end }}
+          sync: true
+          disable: false
+      documentationUrl: https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#get-repository-content
+      manifestId: 97142c29-b621-454c-a211-af629e0aa7fc
+      isPrivate: false
+      isPrivateUrl: true
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/utils/encoding_utils/encode-base64:1.1.1
+      id: encode_wf_yaml_to_base64
+      env:
+        INPUT: '{{ $.retrieve_wf_revision_to_publish.api_object.yaml }}'
+      uuid: 64d139b4-6af5-4c61-a60c-e7fc8799aeee
+      pretty_name: Encode WF YAML to base64
+      options:
+        executor:
+          name: utils_infrastructure_v_1_3_39
+          env:
+            COMMAND: encode_base64
+          sync: true
+          disable: false
+      manifestId: 8f421e3e-c06b-4321-b913-ee7ce4a14e36
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - if:
+        conditions:
+          or:
+            - and:
+                - lvalue: '{{ $.get_current_wf_file.step_status.code }}'
+                  operator: EQUALS
+                  rvalue: "1"
+        then:
+          - name: us-docker.pkg.dev/stackpulse/public/github/update-file:2.0.0
+            id: update_file
+            env:
+              BRANCH_NAME: '{{ $.wf_params.results.branch_name }}'
+              COMMIT_MESSAGE: 'Automatic Commit from Torq for Workflow Id: \\{{ $.event.workflow_id }}\\ with Revision Id: \\{{ $.event.revision_id }}\\ and User provided Description: {{ $.event.description }}'
+              CONTENT: '{{ $.encode_wf_yaml_to_base64.result }}'
+              FILE_PATH: '{{ $.wf_params.results.file_path }}'
+              FILE_SHA1: '{{ $.get_current_wf_file.api_object.sha }}'
+              OWNER_NAME: '{{ $.wf_params.results.github_org }}'
+              REPOSITORY_NAME: '{{ $.wf_params.results.github_repo }}'
+            envFrom:
+              integrationRef: '{{ $.wf_params.results.github_integration }}'
+            uuid: 61ef51b3-5ae1-4ec9-9de0-4f8cf2784bdc
+            pretty_name: Update file
+            options:
+              executor:
+                name: http_request_v_4_2_8
+                env:
+                  AUTHORIZATION: Bearer
+                  BODY: |-
+                    {
+                      "branch": "{{ .BRANCH_NAME | jsonEscape }}",
+                      "content": "{{ .CONTENT | jsonEscape }}",
+                      "message": "{{ .COMMIT_MESSAGE | jsonEscape }}",
+                      "sha": "{{ .FILE_SHA1 | jsonEscape }}"
+                    }
+                  CONTENT_TYPE: application/json; charset=utf-8
+                  HEADERS: |-
+                    {
+                      "accept": "application/vnd.github+json",
+                      "x-github-api-version": "2022-11-28"
+                    }
+                  METHOD: PUT
+                  PARSE_HJSON: "true"
+                  REQUIRED_VARIABLES: '["COMMIT_MESSAGE","CONTENT","FILE_SHA1","BRANCH_NAME","TOKEN","OWNER_NAME","REPOSITORY_NAME","FILE_PATH"]'
+                  TOKEN: '{{ .TOKEN }}'
+                  URL: https://api.github.com/repos/{{ .OWNER_NAME | urlEnc }}/{{ .REPOSITORY_NAME | urlEnc }}/contents/{{ .FILE_PATH | urlEnc }}
+                sync: true
+                disable: false
+            documentationUrl: https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#create-or-update-file-contents
+            manifestId: b57cdb3e-6494-4fb5-b60d-faeb4405651d
+            isPrivate: false
+            isPrivateUrl: true
+            mock_output:
+              enabled: false
+              payload: '{}'
+            skip: false
+          - trigger:
+              id: workflow_test_scaffolding
+              playbook_id: 4b82277b-921a-466e-afa3-a1ddf08ad94c
+              pretty_name: Workflow Test Scaffolding
+              uuid: 399688b9-f412-40ab-8730-5860967a6a66
+              input: |-
+                {
+                  "workflow_id": "{{ $.event.workflow_id }}",
+                  "test_with_mocks": "true",
+                  "revision_id": "{{ $.event.revision_id }}"
+                }
+              playbook_name: Workflow Test Scaffolding New UI Design
+              mock_output:
+                enabled: false
+                payload: '{}'
+          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/print:1.2.0
+            id: pull_request_body
+            env:
+              INPUT: |-
+                This is an automatic pull request created by Torq to *UPDATE* a WF which has been submitted for review.
+
+                The user submmitting the review is: `{{ $.event.triggered_by.user.email }}`
+
+                Workflow Unit Test Results:
+                {{ $.workflow_test_scaffolding.test_report}}
+
+                You can review and approve the draft workflow in this link:
+                {{ $.event.url }}
+            uuid: 2b8a54a8-8aff-4972-bf97-bcf9ca7fe506
+            pretty_name: Pull request body
+            options:
+              executor:
+                name: utils_infrastructure_v_1_3_39
+                env:
+                  COMMAND: print
+                sync: true
+                disable: false
+            manifestId: 989708a1-0c14-4077-8733-c231f1c24335
+            isPrivate: false
+            mock_output:
+              enabled: false
+              payload: '{}'
+            skip: false
+        else:
+          - name: us-docker.pkg.dev/stackpulse/public/github/create-file:3.0.0
+            id: create_file
+            env:
+              BRANCH_NAME: '{{ $.wf_params.results.branch_name }}'
+              COMMIT_MESSAGE: 'Automatic Commit from Torq for Workflow Id: \\{{ $.event.workflow_id }}\\ with Revision Id: \\{{ $.event.revision_id }}\\ and User provided Description: {{ $.event.description }}'
+              CONTENT: '{{ $.encode_wf_yaml_to_base64.result }}'
+              FILE_PATH: '{{ $.wf_params.results.file_path }}'
+              OWNER_NAME: '{{ $.wf_params.results.github_org }}'
+              REPOSITORY_NAME: '{{ $.wf_params.results.github_repo }}'
+            envFrom:
+              integrationRef: '{{ $.wf_params.results.github_integration }}'
+            uuid: 1d3912f6-b1a7-49da-b95c-cae0bb1c8d7f
+            pretty_name: Create File
+            options:
+              executor:
+                name: http_request_v_4_2_8
+                env:
+                  AUTHORIZATION: Bearer
+                  BODY: |-
+                    {
+                    {{ if .BRANCH_NAME }}  "branch": "{{ .BRANCH_NAME | jsonEscape }}",{{ end }}
+                      "content": "{{ .CONTENT | jsonEscape }}",
+                      "message": "{{ .COMMIT_MESSAGE | jsonEscape }}"
+                    }
+                  CONTENT_TYPE: application/json; charset=utf-8
+                  HEADERS: |-
+                    {
+                      "accept": "application/vnd.github+json",
+                      "x-github-api-version": "2022-11-28"
+                    }
+                  METHOD: PUT
+                  PARSE_HJSON: "true"
+                  REQUIRED_VARIABLES: '["COMMIT_MESSAGE","CONTENT","TOKEN","OWNER_NAME","REPOSITORY_NAME","FILE_PATH"]'
+                  TOKEN: '{{ .TOKEN }}'
+                  URL: https://api.github.com/repos/{{ .OWNER_NAME | urlEnc }}/{{ .REPOSITORY_NAME | urlEnc }}/contents/{{ .FILE_PATH | urlEnc }}
+                sync: true
+                disable: false
+            documentationUrl: https://docs.github.com/en/rest/repos/contents?apiVersion=2022-11-28#create-or-update-file-contents
+            manifestId: c06934ef-8977-4b4b-b5ed-cb6a0cf7c7b4
+            isPrivate: false
+            isPrivateUrl: true
+            mock_output:
+              enabled: false
+              payload: '{}'
+            skip: false
+          - trigger:
+              id: workflow_test_scaffolding
+              playbook_id: 4b82277b-921a-466e-afa3-a1ddf08ad94c
+              pretty_name: Workflow Test Scaffolding
+              uuid: 4e5dd55f-e7aa-4839-9535-1f6173cbbe0a
+              input: |-
+                {
+                  "workflow_id": "{{ $.event.workflow_id }}",
+                  "test_with_mocks": "true",
+                  "revision_id": "{{ $.event.revision_id }}"
+                }
+              playbook_name: Workflow Test Scaffolding New UI Design
+              mock_output:
+                enabled: false
+                payload: '{}'
+          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/print:1.2.0
+            id: pull_request_body
+            env:
+              INPUT: |-
+                This is an automatic pull request created by Torq to *CREATE* a new WF which has been submitted for review.
+
+                The user submmitting the review is: `{{ $.event.triggered_by.user.email }}`
+
+                Workflow Unit Test Results:
+                {{ $.workflow_test_scaffolding.test_report}}
+
+                You can review and approve the draft workflow in this link:
+                {{ $.event.url }}
+            uuid: e5eae45b-6b7d-47bd-97f5-be380bf46858
+            pretty_name: Pull request body
+            options:
+              executor:
+                name: utils_infrastructure_v_1_3_39
+                env:
+                  COMMAND: print
+                sync: true
+                disable: false
+            manifestId: 989708a1-0c14-4077-8733-c231f1c24335
+            isPrivate: false
+            mock_output:
+              enabled: false
+              payload: '{}'
+            skip: false
+        uuid: 0cfdfda2-554e-4bb6-94ae-cd520672bf81
+        pretty_name: If WF file exists
+    - name: us-docker.pkg.dev/stackpulse/public/github/create-pull-request:2.0.0
+      id: create_pull_request
+      env:
+        BASE_BRANCH: '{{ $.wf_params.results.root_branch }}'
+        HEAD_BRANCH: '{{ $.wf_params.results.branch_name }}'
+        OWNER_NAME: '{{ $.wf_params.results.github_org }}'
+        PULL_REQUEST_BODY: '{{ $.pull_request_body.output }}'
+        REPOSITORY_NAME: '{{ $.wf_params.results.github_repo }}'
+        TITLE: Create OR Update Workflow \"{{ $.event.workflow_name }}\"
+      envFrom:
+        integrationRef: '{{ $.wf_params.results.github_integration }}'
+      uuid: 80f1e3a6-178d-44f3-8246-8428efb09a68
+      pretty_name: Create Pull Request
+      options:
+        executor:
+          name: http_request_v_4_2_8
+          env:
+            AUTHORIZATION: None
+            BODY: |-
+              {
+                "base": "{{ .BASE_BRANCH | jsonEscape }}",
+                "body": "{{ .PULL_REQUEST_BODY | jsonEscape }}",
+                "head": "{{ .HEAD_BRANCH | jsonEscape }}",
+                "title": "{{ .TITLE | jsonEscape }}"
+              }
+            CONTENT_TYPE: application/json; charset=utf-8
+            HEADERS: |-
+              {
+                "Accept": "application/vnd.github.v3+json",
+                "Authorization": "token {{ .TOKEN | jsonEscape }}",
+                "Content-Type": "application/json"
+              }
+            METHOD: POST
+            PARSE_HJSON: "true"
+            REQUIRED_VARIABLES: '["TOKEN","OWNER_NAME","REPOSITORY_NAME","TITLE","PULL_REQUEST_BODY","HEAD_BRANCH","BASE_BRANCH"]'
+            TIMEOUT: "30"
+            URL: https://api.github.com/repos/{{ .OWNER_NAME | urlEnc }}/{{ .REPOSITORY_NAME | urlEnc }}/pulls
+          sync: true
+          disable: false
+      documentationUrl: https://docs.github.com/en/rest/pulls/pulls?apiVersion=2022-11-28#create-a-pull-request
+      manifestId: feb71dce-6f8b-40a4-9b10-e9048d0064f5
+      isPrivate: false
+      isPrivateUrl: true
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/slack/message/message:2.0.5
+      id: notify_about_new_pr_in_channel
+      env:
+        MESSAGE_TEXT: |-
+          New pull request created for WF review:
+          {{ $.create_pull_request.api_object.html_url }}
+        RECIPIENT: '{{ $.wf_params.results.Slack_Channel_for_Pull_Requests }}'
+      envFrom:
+        integrationRef: '{{ $.wf_params.results.slack_integration }}'
+      uuid: 3a1e13e2-af0d-4d85-9170-9a730ae756f5
+      pretty_name: Notify about new PR in Channel
+      options:
+        executor:
+          name: slack_message_message_v_2_0_5
+          env: {}
+          sync: true
+          disable: false
+      manifestId: 16b116fc-72de-48c2-b5b1-123637e57c37
+      isPrivate: false
+      mock_output:
+        enabled: false
+        payload: '{}'
+      skip: false
+    - exit:
+        success: "true"
+        pretty_name: Exit
+        output: '{}'
+        uuid: 5b41cfc6-192a-4e4f-a110-bbccce0bb0f4
+  annotations:
+    - uuid: 5299e90c-0eaf-4b99-ade3-aeafc9d1098a
+      x: -333
+      "y": 1282
+      width: 336
+      height: 110
+      attachedStepId: 41553321-3723-47cd-af6b-ca8cab695295
+      attachedDistance:
+        x: 333
+        "y": -103
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Check if the workflow exists in the main branch already"}]}]}'
+  output_schema: '{}'
+  tags:
+    - WF CI/CD Pipe
+  section: Workflow CI/CD Pipeline
+root: true

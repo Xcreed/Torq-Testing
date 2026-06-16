@@ -1,0 +1,750 @@
+!!ExportedWorkflow
+apiVersion: torq.io/v2alpha
+kind: Workflow
+id: 109c6899-28fb-4f61-9cd1-db8418e5abe4
+name: VirusTotal URL Enrichment with Cache
+trigger:
+  onDemandTrigger:
+    parameterList:
+      parameters:
+        - name: url
+          description: The URL to analyze with VirusTotal
+          required: true
+          prettyName: URL
+          shortText:
+            defaultValue: ""
+        - name: virustotal_integration
+          description: The VirusTotal integration to use.
+          required: true
+          prettyName: virustotal_integration
+          integration:
+            defaultValue: ""
+            vendor: virustotal_token
+        - name: torq_integration
+          description: The integration with Torq to use for the observable cache.
+          required: true
+          prettyName: Torq Integration
+          integration:
+            defaultValue: ""
+            vendor: torq_token
+        - name: virustotal_malicious_min_score
+          description: The minimum score to consider a file malicious
+          required: true
+          prettyName: virustotal_malicious_min_score
+          shortText:
+            defaultValue: ""
+        - name: virustotal_suspicious_min_score
+          description: The minimum score to consider a file suspicious
+          required: true
+          prettyName: virustotal_suspicious_min_score
+          shortText:
+            defaultValue: ""
+        - name: provide_raw_analysis_data
+          description: Provide the full AlienVault information that was retrieved.
+          required: true
+          prettyName: Provide RAW Analysis Data
+          boolean:
+            defaultValue: false
+    nestedOnly: true
+playbook:
+  steps:
+    - name: us-docker.pkg.dev/stackpulse/public/utils/parameters_utils/workflow_parameters:1.3.0
+      id: workflow_parameters
+      env:
+        SCHEMA: |-
+          {
+              "cache_ttl": {
+                  "type": 11,
+                  "prettyName": "Cache TTL",
+                  "description": "The cache TTL set in hours to cache IOCs",
+                  "uiPlaceholder": "24"
+              }
+          }
+        VALUES: |-
+          {
+            "cache_ttl": 24
+          }
+      uuid: f8732b8f-e987-4c60-9924-afa628f551c0
+      pretty_name: Workflow Parameters
+      options:
+        executor:
+          name: utils_workflow_parameters_v_1_3_0
+          env: {}
+          sync: true
+          disable: false
+      manifestId: 30ebccc8-0ce8-5f13-960d-bc03b0179f53
+      isPrivate: false
+      mock_output:
+        enabled: false
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/utils/cryptographic_utils/calculate-sha1:2.0.0
+      id: calculate_sha1_of_url_in_base64
+      env:
+        FILE: '{{ b64enc $.event.url }}'
+      uuid: d7204ba6-f36a-4c83-8b62-d8f95b87818e
+      pretty_name: Calculate SHA1 of URL in base64
+      options:
+        executor:
+          name: utils_infrastructure_v_1_12_0
+          env:
+            COMMAND: calculate_sha1
+          sync: true
+          disable: false
+      manifestId: 3984d107-81b0-5b62-9868-e850cfb2ae77
+      isPrivate: false
+      mock_output:
+        enabled: false
+      skip: false
+    - name: us-docker.pkg.dev/stackpulse/public/torq/get-a-variable:8.1.0
+      id: read_observable_cache
+      env:
+        KEY: virustotal_{{ $.calculate_sha1_of_url_in_base64.result }}
+      envFrom:
+        integrationRef: '{{ $.event.torq_integration }}'
+      uuid: 0837bac4-d847-4c3c-b42c-6839047328d5
+      pretty_name: Read Observable Cache
+      options:
+        executor:
+          name: http_request_v_4_6_0
+          env:
+            AUTHORIZATION: Bearer
+            HEADERS: '{}'
+            METHOD: GET
+            PARSE_HJSON: "true"
+            REQUIRED_VARIABLES: '["ACCESS_TOKEN", "KEY"]'
+            TIMEOUT: "30"
+            TOKEN: '{{ .ACCESS_TOKEN }}'
+            URL: https://api.{{ .TORQ_BASE_URL }}/public/v2alpha/variables/{{ .KEY }}
+          sync: true
+          disable: false
+      manifestId: 113df204-5b8d-5be4-8f22-895f9e87a732
+      isPrivate: false
+      mock_output:
+        enabled: false
+      skip: false
+    - if:
+        conditions:
+          or:
+            - and:
+                - lvalue: '{{ $.read_observable_cache.api_object }}'
+                  operator: IS_EMPTY
+                  rvalue: ""
+        then:
+          - parallel:
+              uuid: b666a2be-9d29-4e24-a11f-35eb93d3f180
+              pretty_name: Parallel Executions
+              threads:
+                - uuid: 50ce8b1e-7317-431d-9bcf-73095ae203ff
+                  steps:
+                    - name: us-docker.pkg.dev/stackpulse/public/virustotal/get-url-analysis-report:3.0.3
+                      id: get_url_analysis_report
+                      env:
+                        URL_ADDRESS: '{{ $.event.url }}'
+                      envFrom:
+                        integrationRef: '{{ $.event.virustotal_integration }}'
+                      ignoreFailure: true
+                      uuid: e7611a75-ed0c-4542-b58e-91da88973e9b
+                      pretty_name: Get URL Analysis Report
+                      options:
+                        executor:
+                          name: http_request_v_4_2_8
+                          env:
+                            HEADERS: |-
+                              {
+                                  "x-apikey": "{{ .VT_API_KEY }}"
+                              }
+                            METHOD: GET
+                            PARSE_HJSON: "true"
+                            REQUIRED_VARIABLES: '["VT_API_KEY", "URL_ADDRESS"]'
+                            TIMEOUT: "30"
+                            URL: https://www.virustotal.com/api/v3/urls/{{ .URL_ADDRESS | b64enc | trimAll "=" }}
+                          sync: true
+                          disable: false
+                      documentationUrl: https://developers.virustotal.com/reference/url-info
+                      manifestId: ee71d190-eadd-4efc-8adf-2f1a142df12b
+                      isPrivate: false
+                      mock_output:
+                        enabled: false
+                      skip: false
+                - uuid: 3d428c55-d6c3-47ba-9639-097cd6baaf1f
+                  steps:
+                    - name: us-docker.pkg.dev/stackpulse/public/utils/string_utils/defang-or-refang-entity:2.0.2
+                      id: defang_observable
+                      env:
+                        DO_NOT_PARSE_AS_FILE: "true"
+                        INPUT: '{{ $.event.url }}'
+                        OPERATION: Defang
+                      uuid: bc786408-6c34-4402-b230-602d593af8ab
+                      pretty_name: Defang Observable
+                      options:
+                        executor:
+                          name: utils_infrastructure_v_1_9_0
+                          env:
+                            COMMAND: defang_or_refang_entity
+                          sync: true
+                          disable: false
+                      manifestId: 1a14dde2-4ea3-5544-9534-1d81cb596c9a
+                      isPrivate: false
+                      mock_output:
+                        enabled: false
+                      skip: false
+          - if:
+              conditions:
+                or:
+                  - and:
+                      - lvalue: '{{ $.get_url_analysis_report.step_status.code }}'
+                        operator: EQUALS
+                        rvalue: "1"
+              then: []
+              else:
+                - name: us-docker.pkg.dev/stackpulse/public/virustotal/scan-url:3.0.3
+                  id: vt_scan_url
+                  env:
+                    SCAN_URL: '{{ $.event.url }}'
+                  envFrom:
+                    integrationRef: '{{ $.event.virustotal_integration }}'
+                  ignoreFailure: true
+                  uuid: 98062eb7-271e-4aa5-a0fc-711294ad81fb
+                  pretty_name: VT Scan URL
+                  options:
+                    executor:
+                      name: http_request_v_4_2_8
+                      env:
+                        BODY: '[{"key": "url", "type": "text", "value": "{{ .SCAN_URL | jsonEscape }}", "should_exists_var": "SCAN_URL"}]'
+                        CONTENT_TYPE: multipart/form-data
+                        HEADERS: |-
+                          {
+                              "x-apikey": "{{ .VT_API_KEY }}"
+                          }
+                        METHOD: POST
+                        PARSE_HJSON: "true"
+                        REQUIRED_VARIABLES: '["VT_API_KEY", "SCAN_URL"]'
+                        TIMEOUT: "30"
+                        URL: https://www.virustotal.com/api/v3/urls
+                      sync: true
+                      disable: false
+                  documentationUrl: https://developers.virustotal.com/reference/urls
+                  manifestId: ef87b454-ff5d-4c56-bfb7-31f5e48f3e98
+                  isPrivate: false
+                  mock_output:
+                    enabled: false
+                  skip: false
+                - loop:
+                    key: loop_5_key
+                    value: loop_5_value
+                    steps:
+                      - name: us-docker.pkg.dev/stackpulse/public/virustotal/get-analysis-results:3.0.3
+                        id: get_url_analysis_results
+                        env:
+                          ANALYSIS_ID: '{{ $.vt_scan_url.api_object.data.id }}'
+                        envFrom:
+                          integrationRef: '{{ $.event.virustotal_integration }}'
+                        uuid: 12113cc7-9b22-4ff9-aba4-7e5747b6e07e
+                        pretty_name: Get URL Analysis Results
+                        options:
+                          executor:
+                            name: http_request_v_4_2_8
+                            env:
+                              HEADERS: |-
+                                {
+                                    "x-apikey": "{{ .VT_API_KEY }}"
+                                }
+                              METHOD: GET
+                              PARSE_HJSON: "true"
+                              REQUIRED_VARIABLES: '["VT_API_KEY", "ANALYSIS_ID"]'
+                              TIMEOUT: "30"
+                              URL: https://www.virustotal.com/api/v3/analyses/{{ .ANALYSIS_ID | urlEnc }}
+                            sync: true
+                            disable: false
+                        manifestId: d7674e5a-b437-410e-965a-570d19075c02
+                        isPrivate: false
+                        mock_output:
+                          enabled: false
+                        skip: false
+                      - if:
+                          conditions:
+                            or:
+                              - and:
+                                  - lvalue: '{{ $.get_url_analysis_results.api_object.data.attributes.status }}'
+                                    operator: EQUALS
+                                    rvalue: Completed
+                          then:
+                            - break:
+                                pretty_name: Break
+                                uuid: 0f69e37b-584d-4cdb-9668-ff457961b4e1
+                          else:
+                            - wait:
+                                id: wait_20s
+                                pretty_name: Wait 20s
+                                uuid: 66b2b369-51fa-43bd-be41-82dd133fb52d
+                                time_unit: "1"
+                                duration: "20"
+                          uuid: 2edb976d-fabe-49ce-b966-1a1ad71bba4d
+                          pretty_name: If Analysis Completed
+                    uuid: ccb5ea83-f81e-4245-b67b-5c6a70a76f5e
+                    pretty_name: Get Results
+                    until_break: true
+                - name: us-docker.pkg.dev/stackpulse/public/virustotal/get-url-analysis-report:3.0.3
+                  id: get_url_analysis_report
+                  env:
+                    URL_ADDRESS: '{{ $.event.url }}'
+                  envFrom:
+                    integrationRef: '{{ $.event.virustotal_integration }}'
+                  ignoreFailure: true
+                  uuid: c9d1267e-4bcd-40c7-afec-f6aaea888e7c
+                  pretty_name: Get URL Analysis Report
+                  options:
+                    executor:
+                      name: http_request_v_4_2_8
+                      env:
+                        HEADERS: |-
+                          {
+                              "x-apikey": "{{ .VT_API_KEY }}"
+                          }
+                        METHOD: GET
+                        PARSE_HJSON: "true"
+                        REQUIRED_VARIABLES: '["VT_API_KEY", "URL_ADDRESS"]'
+                        TIMEOUT: "30"
+                        URL: https://www.virustotal.com/api/v3/urls/{{ .URL_ADDRESS | b64enc | trimAll "=" }}
+                      sync: true
+                      disable: false
+                  documentationUrl: https://developers.virustotal.com/reference/url-info
+                  manifestId: ee71d190-eadd-4efc-8adf-2f1a142df12b
+                  isPrivate: false
+                  mock_output:
+                    enabled: false
+                  skip: false
+              uuid: ac244e73-a4b9-4a85-8b47-39f56cc3ec55
+              pretty_name: If Reputation Found
+          - parallel:
+              uuid: 7943e3b4-2aa5-4434-b196-10288bfb47cc
+              pretty_name: Set Variables on Verdicts
+              threads:
+                - uuid: a3eae5fd-dbda-42ba-ab48-2d2978c69246
+                  steps:
+                    - if:
+                        conditions:
+                          or:
+                            - and:
+                                - lvalue: '{{ $.get_url_analysis_report.api_object.data.attributes.last_analysis_stats.malicious }}'
+                                  operator: GREATER_EQUAL
+                                  rvalue: '{{ $.event.virustotal_malicious_min_score }}'
+                        then:
+                          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.2
+                            id: set_malicious_variable
+                            env:
+                              DATA_TYPE: boolean
+                              VALUE_BOOLEAN: "true"
+                              VARIABLE_NAME: state
+                            uuid: f3c74981-aaf6-464f-b35b-133e24612b10
+                            pretty_name: Set Malicious Variable
+                            options:
+                              executor:
+                                name: utils_infrastructure_v_1_3_39
+                                env:
+                                  COMMAND: set_variable
+                                  SP_ENV_SCHEMA: '{"type": "object", "properties": {"DATA_TYPE": {"enum": ["boolean", "string", "JSON", "number"]}}, "required": ["VARIABLE_NAME", "DATA_TYPE"], "allOf": [{"if": {"properties": {"DATA_TYPE": {"const": "number"}}}, "then": {"required": ["VALUE_NUMBER"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "boolean"}}}, "then": {"required": ["VALUE_BOOLEAN"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "JSON"}}}, "then": {"required": ["VALUE_JSON"]}}]}'
+                                sync: true
+                                disable: false
+                            manifestId: 25cbcffc-e660-43ed-804b-3c01c89180a2
+                            isPrivate: false
+                            mock_output:
+                              enabled: false
+                              payload: '{}'
+                            skip: false
+                        else:
+                          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.2
+                            id: set_malicious_variable
+                            env:
+                              DATA_TYPE: boolean
+                              VALUE_BOOLEAN: "false"
+                              VARIABLE_NAME: state
+                            uuid: ed29b216-7691-443f-aa7e-8d87e1cf466b
+                            pretty_name: Set Malicious Variable
+                            options:
+                              executor:
+                                name: utils_infrastructure_v_1_3_39
+                                env:
+                                  COMMAND: set_variable
+                                  SP_ENV_SCHEMA: '{"type": "object", "properties": {"DATA_TYPE": {"enum": ["boolean", "string", "JSON", "number"]}}, "required": ["VARIABLE_NAME", "DATA_TYPE"], "allOf": [{"if": {"properties": {"DATA_TYPE": {"const": "number"}}}, "then": {"required": ["VALUE_NUMBER"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "boolean"}}}, "then": {"required": ["VALUE_BOOLEAN"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "JSON"}}}, "then": {"required": ["VALUE_JSON"]}}]}'
+                                sync: true
+                                disable: false
+                            manifestId: 25cbcffc-e660-43ed-804b-3c01c89180a2
+                            isPrivate: false
+                            mock_output:
+                              enabled: false
+                              payload: '{}'
+                            skip: false
+                        uuid: 62943e4b-4d14-4142-91f7-e6e4034d260b
+                        pretty_name: If Malicious with Malicious Finding
+                - uuid: 7225826f-88f6-43ba-87a9-c7f348b0612a
+                  steps:
+                    - if:
+                        conditions:
+                          or:
+                            - and:
+                                - lvalue: '{{ $.get_url_analysis_report.api_object.data.attributes.last_analysis_stats.suspicious }}'
+                                  operator: GREATER_EQUAL
+                                  rvalue: '{{ $.event.virustotal_suspicious_min_score }}'
+                        then:
+                          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.2
+                            id: set_suspicious_variable
+                            env:
+                              DATA_TYPE: boolean
+                              VALUE_BOOLEAN: "true"
+                              VARIABLE_NAME: state
+                            uuid: a9ef7207-17fd-4312-8f49-efae1dc3527c
+                            pretty_name: Set Suspicious Variable
+                            options:
+                              executor:
+                                name: utils_infrastructure_v_1_3_39
+                                env:
+                                  COMMAND: set_variable
+                                  SP_ENV_SCHEMA: '{"type": "object", "properties": {"DATA_TYPE": {"enum": ["boolean", "string", "JSON", "number"]}}, "required": ["VARIABLE_NAME", "DATA_TYPE"], "allOf": [{"if": {"properties": {"DATA_TYPE": {"const": "number"}}}, "then": {"required": ["VALUE_NUMBER"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "boolean"}}}, "then": {"required": ["VALUE_BOOLEAN"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "JSON"}}}, "then": {"required": ["VALUE_JSON"]}}]}'
+                                sync: true
+                                disable: false
+                            manifestId: 25cbcffc-e660-43ed-804b-3c01c89180a2
+                            isPrivate: false
+                            mock_output:
+                              enabled: false
+                              payload: '{}'
+                            skip: false
+                        else:
+                          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.2
+                            id: set_suspicious_variable
+                            env:
+                              DATA_TYPE: boolean
+                              VALUE_BOOLEAN: "false"
+                              VARIABLE_NAME: state
+                            uuid: 9d2a96d1-34c5-403f-bbd2-7f7dc4e51720
+                            pretty_name: Set Suspicious Variable
+                            options:
+                              executor:
+                                name: utils_infrastructure_v_1_3_39
+                                env:
+                                  COMMAND: set_variable
+                                  SP_ENV_SCHEMA: '{"type": "object", "properties": {"DATA_TYPE": {"enum": ["boolean", "string", "JSON", "number"]}}, "required": ["VARIABLE_NAME", "DATA_TYPE"], "allOf": [{"if": {"properties": {"DATA_TYPE": {"const": "number"}}}, "then": {"required": ["VALUE_NUMBER"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "boolean"}}}, "then": {"required": ["VALUE_BOOLEAN"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "JSON"}}}, "then": {"required": ["VALUE_JSON"]}}]}'
+                                sync: true
+                                disable: false
+                            manifestId: 25cbcffc-e660-43ed-804b-3c01c89180a2
+                            isPrivate: false
+                            mock_output:
+                              enabled: false
+                              payload: '{}'
+                            skip: false
+                        uuid: 675b5849-fe31-404c-b8e1-db8165e3f986
+                        pretty_name: If Suspicious Finding
+                - uuid: 0e0db8fe-f459-40e4-9497-cc23a586b837
+                  steps:
+                    - name: us-docker.pkg.dev/stackpulse/public/jq/infra:3.9.0
+                      id: categories
+                      env:
+                        INPUT: '{{ $.get_url_analysis_report.api_object.data.attributes.categories }}'
+                        JSON_QUERY: to_entries[] |.value | ascii_downcase
+                      uuid: 9df4bb92-c58c-44d4-a0f5-c7ccecd786ba
+                      pretty_name: Categories
+                      options:
+                        executor:
+                          name: jq_infra_v_3_9_0
+                          env:
+                            COMMAND: jq_command
+                          sync: true
+                          disable: false
+                      documentationUrl: https://stedolan.github.io/jq/manual/#Basicfilters
+                      manifestId: eff9788e-be58-533f-9dde-3703babc5128
+                      isPrivate: false
+                      isPrivateUrl: true
+                      skip: false
+                    - if:
+                        conditions:
+                          or:
+                            - and:
+                                - lvalue: '{{ $.categories.output}}'
+                                  operator: CONTAINS
+                                  rvalue: phishing
+                        then:
+                          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.2
+                            id: set_phishing_variable
+                            env:
+                              DATA_TYPE: boolean
+                              VALUE_BOOLEAN: "true"
+                              VARIABLE_NAME: state
+                            uuid: b392e13b-aef5-4b47-bc35-b990f6159a0d
+                            pretty_name: Set Phishing Variable
+                            options:
+                              executor:
+                                name: utils_infrastructure_v_1_3_39
+                                env:
+                                  COMMAND: set_variable
+                                  SP_ENV_SCHEMA: '{"type": "object", "properties": {"DATA_TYPE": {"enum": ["boolean", "string", "JSON", "number"]}}, "required": ["VARIABLE_NAME", "DATA_TYPE"], "allOf": [{"if": {"properties": {"DATA_TYPE": {"const": "number"}}}, "then": {"required": ["VALUE_NUMBER"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "boolean"}}}, "then": {"required": ["VALUE_BOOLEAN"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "JSON"}}}, "then": {"required": ["VALUE_JSON"]}}]}'
+                                sync: true
+                                disable: false
+                            manifestId: 25cbcffc-e660-43ed-804b-3c01c89180a2
+                            isPrivate: false
+                            mock_output:
+                              enabled: false
+                              payload: '{}'
+                            skip: false
+                        else:
+                          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.2
+                            id: set_phishing_variable
+                            env:
+                              DATA_TYPE: boolean
+                              VALUE_BOOLEAN: "false"
+                              VARIABLE_NAME: state
+                            uuid: e56226cc-b365-45d9-bed4-ad30f252644b
+                            pretty_name: Set Phishing Variable
+                            options:
+                              executor:
+                                name: utils_infrastructure_v_1_3_39
+                                env:
+                                  COMMAND: set_variable
+                                  SP_ENV_SCHEMA: '{"type": "object", "properties": {"DATA_TYPE": {"enum": ["boolean", "string", "JSON", "number"]}}, "required": ["VARIABLE_NAME", "DATA_TYPE"], "allOf": [{"if": {"properties": {"DATA_TYPE": {"const": "number"}}}, "then": {"required": ["VALUE_NUMBER"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "boolean"}}}, "then": {"required": ["VALUE_BOOLEAN"]}}, {"if": {"properties": {"DATA_TYPE": {"const": "JSON"}}}, "then": {"required": ["VALUE_JSON"]}}]}'
+                                sync: true
+                                disable: false
+                            manifestId: 25cbcffc-e660-43ed-804b-3c01c89180a2
+                            isPrivate: false
+                            mock_output:
+                              enabled: false
+                              payload: '{}'
+                            skip: false
+                        uuid: 18babe78-c7b5-449c-aff2-3171a3794f30
+                        pretty_name: If Risk Mapping Contains Phishing and Score above 25
+          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.6
+            id: enrichment_results
+            env:
+              DATA_TYPE: JSON
+              VALUE_JSON: "{\n  \"malicious\": {{ $.set_malicious_variable.state }},\n  \"suspicious\": {{ $.set_suspicious_variable.state }},\n  \"phishing\": {{ $.set_phishing_variable.state }},\n  \"observable_reputation\": \"{{ if eq true $.set_malicious_variable.state }}malicious{{ else if eq true $.set_phishing_variable.state }}phishing{{ else if eq true $.set_suspicious_variable.state }}suspicous{{ else }}unknown{{ end }}\",\n  \"observable_value\": \"{{ $.event.url }}\",\n  \"observable_defanged_value\": \"{{ $.defang_observable.result }}\",\n  \"observable_type\": \"URL\",\n  \"raw_data\": {{ $.get_url_analysis_report.api_object.data }},  \n  \"last_analsys_stats\": {{ $.get_url_analysis_report.api_object.data.attributes.last_analysis_stats }}\n}"
+              VARIABLE_NAME: output
+            uuid: 8ab14aef-1f2f-4837-bd70-f39fb8bc166b
+            pretty_name: Enrichment Results
+            options:
+              executor:
+                name: utils_infrastructure_v_1_9_0
+                env:
+                  COMMAND: set_variable
+                sync: true
+                disable: false
+            manifestId: c7abdf70-5f5b-5cf4-8358-42bfd7b950ea
+            isPrivate: false
+            mock_output:
+              enabled: false
+            skip: false
+          - name: us-docker.pkg.dev/stackpulse/public/torq/set-a-variable:8.1.0
+            id: save_the_observable_details_to_cache
+            env:
+              EXPIRES_IN: '{{ $.workflow_parameters.cache_ttl }}h'
+              KEY: virustotal_{{ $.calculate_sha1_of_url_in_base64.result }}
+              VALUE: '{{ $.enrichment_results.output }}'
+            envFrom:
+              integrationRef: '{{ $.event.torq_integration }}'
+            uuid: 038a175c-5b15-47f1-be73-c754266d0bff
+            pretty_name: Save the Observable Details to Cache
+            options:
+              executor:
+                name: http_request_v_4_6_0
+                env:
+                  AUTHORIZATION: Bearer
+                  BODY: |-
+                    {
+                    {{ if or .EXPIRES_IN }}    "expires_in": "{{ .EXPIRES_IN | jsonEscape }}",{{ end }}
+                    {{ if or .DO_NOT_RETURN_VALUE }}    "no_print": {{ .DO_NOT_RETURN_VALUE }},{{ end }}
+                        "value": {{ .VALUE }}
+                    }
+                  CONTENT_TYPE: application/json
+                  HEADERS: '{}'
+                  METHOD: POST
+                  PARSE_HJSON: "true"
+                  REQUIRED_VARIABLES: '["ACCESS_TOKEN", "KEY", "VALUE"]'
+                  TIMEOUT: "30"
+                  TOKEN: '{{ .ACCESS_TOKEN }}'
+                  URL: https://api.{{ .TORQ_BASE_URL }}/public/v2alpha/variables/{{ .KEY }}
+                sync: true
+                disable: false
+            manifestId: 0cd7861c-160a-5b92-9293-28d09953c01f
+            isPrivate: false
+            mock_output:
+              enabled: false
+            skip: false
+        else:
+          - name: us-docker.pkg.dev/stackpulse/public/utils/output_utils/set-variable:2.1.6
+            id: enrichment_results
+            env:
+              DATA_TYPE: JSON
+              VALUE_JSON: '{{ $.read_observable_cache.api_object.value }}'
+              VARIABLE_NAME: output
+            uuid: 8a97cb4f-0b1f-4a1e-b5e8-8e0910333f10
+            pretty_name: Enrichment Results
+            options:
+              executor:
+                name: utils_infrastructure_v_1_9_0
+                env:
+                  COMMAND: set_variable
+                sync: true
+                disable: false
+            manifestId: c7abdf70-5f5b-5cf4-8358-42bfd7b950ea
+            isPrivate: false
+            mock_output:
+              enabled: false
+            skip: false
+        uuid: 0cd8d51e-16a8-4bf3-94fa-c9cfa0d8ed01
+        pretty_name: If Cache is Empty
+    - if:
+        conditions:
+          or:
+            - and:
+                - lvalue: '{{ $.event.provide_raw_analysis_data }}'
+                  operator: EQUALS
+                  rvalue: "true"
+        then: []
+        else:
+          - name: us-docker.pkg.dev/stackpulse/public/jq/infra:3.9.0
+            id: enrichment_results
+            env:
+              INPUT: '{{ $.enrichment_results.output }}'
+              JSON_QUERY: del(.raw_data)
+            uuid: fb6d1ec3-4335-40e7-b747-cd8182219876
+            pretty_name: Enrichment Results
+            options:
+              executor:
+                name: jq_infra_v_3_9_0
+                env:
+                  COMMAND: jq_command
+                sync: true
+                disable: false
+            documentationUrl: https://stedolan.github.io/jq/manual/#Basicfilters
+            manifestId: eff9788e-be58-533f-9dde-3703babc5128
+            isPrivate: false
+            isPrivateUrl: true
+            mock_output:
+              enabled: false
+            skip: false
+        uuid: ecf62daf-6566-4de6-bf2f-2050a5b4780c
+        pretty_name: If Add Raw Analysis
+    - exit:
+        success: "true"
+        pretty_name: Exit
+        output: |-
+          {
+            "output": {{ $.enrichment_results.output }}
+          }
+        uuid: 94e851fd-feaa-49f7-a267-f1c95968b4b2
+        use_schema: true
+  annotations:
+    - uuid: 5b5c2983-67b2-46ff-bd00-4275c5b0dbb6
+      x: -688
+      "y": 103
+      width: 500
+      height: 653
+      attachedStepId: f8732b8f-e987-4c60-9924-afa628f551c0
+      attachedDistance:
+        x: 688
+        "y": 27
+      content: '{"type":"doc","content":[{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"VirusTotal URL Enrichment with Cache"}]},{"type":"paragraph"},{"type":"paragraph","content":[{"type":"text","text":"This workflow is designed to be used as a nested workflow to gather information from VirusTotal on a URL.  The output of the workflow will be saved in a cache via a Torq global variable for the specified amount of time in the workflow parameter cache setting."}]},{"type":"paragraph","content":[{"type":"text","text":"Set the malicious or suspicious engine count to the desired level for the workflow to consider the URL malicious or suspicious.  The default is set to 5 engines."}]},{"type":"paragraph","content":[{"type":"text","text":"If the URL is not found in VirusTotal it is submitted for analysis."}]},{"type":"paragraph","content":[{"type":"text","text":"The workflow will parse the last analysis stats for the count of engines that define the URL as malicious or suspicious.  If any categories include "},{"type":"text","marks":[{"type":"code"}],"text":"phishing"},{"type":"text","text":" in their text the phishing output variable will be set to "},{"type":"text","marks":[{"type":"code"}],"text":"true"},{"type":"text","text":"."}]},{"type":"paragraph","content":[{"type":"text","text":"Set the workflow parameter "},{"type":"text","marks":[{"type":"code"}],"text":"Provide RAW Analysis Data"},{"type":"text","text":" to provide the raw output to receive the full VirusTotal analysis."}]},{"type":"paragraph","content":[{"type":"text","text":"                    "},{"type":"image","attrs":{"src":"https://storage.googleapis.com/stackpulse-public/vendors/virustotal.svg","alt":null,"title":null}}]}]}'
+    - uuid: 76e9508b-df75-4a19-8ac5-c8a29a918deb
+      x: 1164
+      "y": 2435
+      width: 417
+      height: 109
+      attachedStepId: 7943e3b4-2aa5-4434-b196-10288bfb47cc
+      attachedDistance:
+        x: -324
+        "y": -64
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Set the variables if Malicious, Suspicious or Phishing findings are provided."}]}]}'
+    - uuid: 5d3a3f75-4493-40a0-be68-5ed58331cb8e
+      x: 1148
+      "y": 1303
+      width: 324
+      height: 109
+      attachedStepId: 98062eb7-271e-4aa5-a0fc-711294ad81fb
+      attachedDistance:
+        x: -308
+        "y": -98
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"If the URL was submitted, loop until the results are available."}]}]}'
+    - uuid: 17607600-a662-48ac-bebf-2702e96c1e0a
+      x: 349
+      "y": 918
+      width: 324
+      height: 92
+      attachedStepId: e7611a75-ed0c-4542-b58e-91da88973e9b
+      attachedDistance:
+        x: 350
+        "y": -106
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Check if the URL hash an Analysis Report"}]}]}'
+    - uuid: b408cb18-6bff-48ce-9380-3f353fa7b90d
+      x: 3430
+      "y": 1449
+      width: 489
+      height: 132
+      attachedStepId: 9df4bb92-c58c-44d4-a0f5-c7ccecd786ba
+      attachedDistance:
+        x: -350
+        "y": -100
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Check if Phishing is included in the analysis categories. Convert all categories to lower case to check if phishing is included in a category."}]}]}'
+    - uuid: 7714eb19-3772-408c-ab90-f6b3943e98f3
+      x: 334
+      "y": 234
+      width: 395
+      height: 92
+      attachedStepId: f8732b8f-e987-4c60-9924-afa628f551c0
+      attachedDistance:
+        x: -334
+        "y": -103
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Set the TTL time for the cache."}]}]}'
+    - uuid: 7064f668-12ba-40d8-b2a9-e58929f9908d
+      x: 337
+      "y": 355
+      width: 403
+      height: 126
+      attachedStepId: d7204ba6-f36a-4c83-8b62-d8f95b87818e
+      attachedDistance:
+        x: -337
+        "y": -93
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Create a hash for the base64 encoded value of the URL.  This is used for the name of the cache global variable entry."}]}]}'
+    - uuid: 84114dea-c117-4896-b2a2-fa719f41df9e
+      x: -308
+      "y": 874
+      attachedStepId: 8a97cb4f-0b1f-4a1e-b5e8-8e0910333f10
+      attachedDistance:
+        x: 168
+        "y": -206
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"If a cache entry exists, set the variable and send the output to the parent workflow."}]}]}'
+    - uuid: 99e3cd1c-1806-4351-9687-e4ff359be794
+      x: 1330
+      "y": 913
+      attachedStepId: bc786408-6c34-4402-b230-602d593af8ab
+      attachedDistance:
+        x: -350
+        "y": -101
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Defang the URL value and send it as part of the output."}]}]}'
+    - uuid: 956060ca-0e57-41a1-adfa-19f12d9e7db2
+      x: 621
+      "y": 2217
+      attachedStepId: c9d1267e-4bcd-40c7-afec-f6aaea888e7c
+      attachedDistance:
+        x: -341
+        "y": -95
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Refresh the data from the submitted analysis."}]}]}'
+    - uuid: edd6c651-4e39-47e0-a74e-bb31e4774d6d
+      x: 1202
+      "y": 3299
+      content: '{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"Set the variable for the results that were obtained and save them to the cache."}]}]}'
+    - uuid: a9fd691b-0e59-4979-b255-2d9d5f2125d0
+      x: 381
+      "y": 3716
+      width: 526
+      height: 234
+      attachedStepId: fb6d1ec3-4335-40e7-b747-cd8182219876
+      attachedDistance:
+        x: -521
+        "y": -35
+      content: '{"type":"doc","content":[{"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Provide Original Analysis Output"}]},{"type":"paragraph"},{"type":"paragraph","content":[{"type":"text","text":"When Provide "},{"type":"text","marks":[{"type":"code"}],"text":"Raw Analysis Data"},{"type":"text","text":" parameter is set to "},{"type":"text","marks":[{"type":"code"}],"text":"false"},{"type":"text","text":". Original JSON object returned by vendor API is deleted from output."}]},{"type":"paragraph","content":[{"type":"text","text":"When "},{"type":"text","marks":[{"type":"code"}],"text":"Provide Raw Analysis Data"},{"type":"text","text":" parameter is set to "},{"type":"text","marks":[{"type":"code"}],"text":"true"},{"type":"text","text":". Both, original API Response and the Workflows Summary results are returned to parent workflow."}]}]}'
+  output_schema: |-
+    {
+        "output": {
+            "type": 10,
+            "prettyName": "output",
+            "description": ""
+        }
+    }
+root: true
